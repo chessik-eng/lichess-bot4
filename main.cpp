@@ -131,7 +131,7 @@ int main(){
  Board b;b.fen(START);string line;
  while(getline(cin,line)){
   istringstream in(line);string cmd;in>>cmd;
-  if(cmd=="uci")cout<<"id name Alokhin-Alekhine Engine 0.4\\nid author AA Engine Project\\nuciok\\n";
+  if(cmd=="uci")cout<<"id name Alokhin-Alekhine Engine 0.5\\nid author AA Engine Project\\nuciok\\n";
   else if(cmd=="isready")cout<<"readyok\\n";
   else if(cmd=="ucinewgame"){b.fen(START);tt.clear();}
   else if(cmd=="position"){
