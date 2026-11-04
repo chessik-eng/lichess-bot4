@@ -15,6 +15,16 @@ jobs:
           printf 'uci\nisready\nposition startpos\ngo depth 2\nquit\n' | ./aa-engine | tee output.txt
           grep -q 'uciok' output.txt
           grep -q 'bestmove' output.txt
+      - name: Validate initial-position perft
+        run: |
+          printf 'position startpos\nperft 1\nperft 2\nperft 3\nquit\n' | ./aa-engine | tee perft.txt
+          grep -q 'perft 1 nodes 20' perft.txt
+          grep -q 'perft 2 nodes 400' perft.txt
+          grep -q 'perft 3 nodes 8902' perft.txt
+      - name: Check clock-based search
+        run: |
+          printf 'position startpos\ngo movetime 200\nquit\n' | ./aa-engine | tee timed.txt
+          grep -q 'bestmove' timed.txt
       - uses: actions/upload-artifact@v4
         with:
           name: aa-engine-linux
