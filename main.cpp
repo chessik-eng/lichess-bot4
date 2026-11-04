@@ -1,4 +1,8 @@
 #include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <unordered_map>
+#include <stdexcept>
 #include <array>
 #include <cctype>
 #include <iostream>
@@ -74,4 +78,105 @@ int search(const Board& b,int depth,int alpha,int beta,int ply=0){
  }
  return alpha;
 }
-int main(){ios::sync_with_stdio(false);cin.tie(nullptr);Board b;b.fen(START);string line;while(getline(cin,line)){istringstream in(line);string cmd;in>>cmd;if(cmd=="uci"){cout<<"id name Alokhin-Alekhine Engine 0.2\nid author AA Engine Project\nuciok\n";}else if(cmd=="isready")cout<<"readyok\n";else if(cmd=="ucinewgame")b.fen(START);else if(cmd=="position"){string kind;in>>kind;if(kind=="startpos")b.fen(START);else if(kind=="fen"){string f,part;for(int i=0;i<6&&in>>part;i++){if(part=="moves")break;f+=(i?" ":"")+part;}b.fen(f);}string word;while(in>>word){if(word=="moves")continue;for(auto m:b.moves())if(notation(m)==word){b=b.play(m);break;}}}else if(cmd=="go"){int depth=3;string token;while(in>>token)if(token=="depth")in>>depth;depth=clamp(depth,1,5);auto ms=b.moves();orderMoves(b,ms);if(ms.empty()){cout<<"bestmove 0000\n";continue;}Move best=ms[0];int val=-32000;for(auto m:ms){int v=-search(b.play(m),depth-1,-32000,32000);if(v>val){val=v;best=m;}}cout<<"bestmove "<<notation(best)<<"\n";}else if(cmd=="quit")break;cout.flush();}}
+using Clock=chrono::steady_clock;
+struct TTEntry { int depth, score, flag; };
+unordered_map<string,TTEntry> tt;
+Clock::time_point deadline;
+uint64_t nodes=0;
+bool timed=false;
+string keyOf(const Board& b){
+ string k(b.s.begin(),b.s.end());
+ k+=b.white?'w':'b';k+=b.castle;k+='|';k+=to_string(b.ep);
+ return k;
+}
+void tick(){if((++nodes&2047)==0&&timed&&Clock::now()>=deadline)throw runtime_error("time");}
+int qsearch(const Board& b,int alpha,int beta,int ply){
+ tick();if(ply>=16)return evaluate(b);
+ bool checked=b.check(b.white);int stand=evaluate(b);
+ if(!checked){if(stand>=beta)return beta;alpha=max(alpha,stand);}
+ auto ms=b.moves();if(ms.empty())return checked?-30000+ply:0;
+ orderMoves(b,ms);
+ for(auto m:ms){if(!checked&&b.s[m.b]=='.'&&m.b!=b.ep&&!m.p)continue;
+ int v=-qsearch(b.play(m),-beta,-alpha,ply+1);
+ if(v>=beta)return beta;alpha=max(alpha,v);}
+ return alpha;
+}
+int negamax(const Board& b,int depth,int alpha,int beta,int ply){
+ tick();if(depth<=0)return qsearch(b,alpha,beta,ply);
+ string key=keyOf(b);int originalAlpha=alpha;
+ auto it=tt.find(key);
+ if(it!=tt.end()&&it->second.depth>=depth){
+  auto e=it->second;
+  if(e.flag==0)return e.score;
+  if(e.flag==1)alpha=max(alpha,e.score);
+  if(e.flag==2)beta=min(beta,e.score);
+  if(alpha>=beta)return e.score;
+ }
+ auto ms=b.moves();if(ms.empty())return b.check(b.white)?-30000+ply:0;
+ orderMoves(b,ms);int best=-32000;
+ for(auto m:ms){int v=-negamax(b.play(m),depth-1,-beta,-alpha,ply+1);
+ best=max(best,v);alpha=max(alpha,v);if(alpha>=beta)break;}
+ if(tt.size()>150000)tt.clear();
+ tt[key]={depth,best,best<=originalAlpha?2:(best>=beta?1:0)};
+ return best;
+}
+uint64_t perft(const Board& b,int depth){
+ if(depth==0)return 1;
+ auto ms=b.moves();if(depth==1)return ms.size();
+ uint64_t n=0;for(auto m:ms)n+=perft(b.play(m),depth-1);return n;
+}
+int main(){
+ ios::sync_with_stdio(false);cin.tie(nullptr);
+ Board b;b.fen(START);string line;
+ while(getline(cin,line)){
+  istringstream in(line);string cmd;in>>cmd;
+  if(cmd=="uci")cout<<"id name Alokhin-Alekhine Engine 0.3\\nid author AA Engine Project\\nuciok\\n";
+  else if(cmd=="isready")cout<<"readyok\\n";
+  else if(cmd=="ucinewgame"){b.fen(START);tt.clear();}
+  else if(cmd=="position"){
+   string kind;in>>kind;
+   if(kind=="startpos")b.fen(START);
+   else if(kind=="fen"){string fen,part;for(int i=0;i<6&&in>>part;i++)fen+=(i?" ":"")+part;b.fen(fen);}
+   string word;while(in>>word){if(word=="moves")continue;
+    for(auto m:b.moves())if(notation(m)==word){b=b.play(m);break;}
+   }
+  }else if(cmd=="go"){
+   int depth=5,movetime=-1,wtime=-1,btime=-1,winc=0,binc=0,movestogo=30;string token;
+   bool depthGiven=false;
+   while(in>>token){
+    if(token=="depth"){in>>depth;depthGiven=true;}
+    else if(token=="movetime")in>>movetime;
+    else if(token=="wtime")in>>wtime;
+    else if(token=="btime")in>>btime;
+    else if(token=="winc")in>>winc;
+    else if(token=="binc")in>>binc;
+    else if(token=="movestogo")in>>movestogo;
+   }
+   int remain=b.white?wtime:btime,inc=b.white?winc:binc;
+   if(movetime<0&&remain>=0)movetime=max(10,min(remain/2,remain/max(1,movestogo)+inc/2));
+   timed=movetime>=0;nodes=0;
+   if(timed)deadline=Clock::now()+chrono::milliseconds(max(1,movetime-20));
+   auto ms=b.moves();orderMoves(b,ms);
+   if(ms.empty()){cout<<"bestmove 0000\\n";continue;}
+   Move best=ms[0];
+   int maxdepth=depthGiven?clamp(depth,1,32):32;
+   if(!timed&&!depthGiven)maxdepth=4;
+   for(int d=1;d<=maxdepth;d++){
+    try{
+     int score=-32000;Move candidate=best;
+     for(auto m:ms){
+      int v=-negamax(b.play(m),d-1,-32000,32000,1);
+      if(v>score){score=v;candidate=m;}
+     }
+     best=candidate;
+     cout<<"info depth "<<d<<" score cp "<<score<<" nodes "<<nodes<<" pv "<<notation(best)<<"\\n";
+     if(timed&&Clock::now()>=deadline)break;
+    }catch(const runtime_error&){break;}
+   }
+   cout<<"bestmove "<<notation(best)<<"\\n";
+  }else if(cmd=="perft"){
+   int d=1;in>>d;if(d>=0&&d<=5)cout<<"perft "<<d<<" nodes "<<perft(b,d)<<"\\n";
+  }else if(cmd=="quit")break;
+  cout.flush();
+ }
+}
