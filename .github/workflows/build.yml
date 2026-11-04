@@ -21,6 +21,8 @@ jobs:
           grep -q 'perft 1 nodes 20' perft.txt
           grep -q 'perft 2 nodes 400' perft.txt
           grep -q 'perft 3 nodes 8902' perft.txt
+          printf 'position startpos\nperft 4\nquit\n' | ./aa-engine | tee perft4.txt
+          grep -q 'perft 4 nodes 197281' perft4.txt
       - name: Check clock-based search
         run: |
           printf 'position startpos\ngo movetime 200\nquit\n' | ./aa-engine | tee timed.txt
