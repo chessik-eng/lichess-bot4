@@ -1,0 +1,21 @@
+name: Build AA Engine
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: g++ -std=c++17 -O2 -Wall -Wextra main.cpp -o aa-engine
+      - name: UCI smoke test
+        run: |
+          printf 'uci\nisready\nposition startpos\ngo depth 2\nquit\n' | ./aa-engine | tee output.txt
+          grep -q 'uciok' output.txt
+          grep -q 'bestmove' output.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aa-engine-linux
+          path: aa-engine
