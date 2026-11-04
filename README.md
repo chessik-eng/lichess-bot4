@@ -35,3 +35,11 @@ Perft validation, time controls, move ordering, iterative deepening, quiescence,
 ## Version 0.2 status
 
 This version improves tactical search compared with v0.1, but strength gains have **not** been measured. The engine is **not proven stronger than Stockfish 19**. UCI clock handling, repetition detection, perft and match testing remain required before Lichess deployment.
+
+## Version 0.4
+
+- Track the halfmove clock in positions and moves, with basic 50-move draw scoring in search.
+- Include halfmove clock in transposition table keys to avoid reusing draw-sensitive evaluations.
+- Extend start-position perft regression coverage to depth 4 (197281 nodes).
+
+**Still experimental:** Threefold repetition, robust UCI stop/ponder handling, thorough castling/en-passant test positions, and full bot integration are not implemented. The 50-move rule handling is basic and does not cover every adjudication edge case. No measured Elo gain or superiority over Stockfish 19 is claimed.
