@@ -28,6 +28,50 @@ struct Board {
 };
 const string START="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 string notation(Move m){string z;z+=char('a'+m.a%8);z+=char('1'+m.a/8);z+=char('a'+m.b%8);z+=char('1'+m.b/8);if(m.p)z+=m.p;return z;}
-int evaluate(const Board& b){int score=0;for(char x:b.s){int v=0;switch(toupper(x)){case 'P':v=100;break;case 'N':v=320;break;case 'B':v=330;break;case 'R':v=500;break;case 'Q':v=900;break;}score+=(isupper(x)?v:-v);}return b.white?score:-score;}
-int search(const Board& b,int depth,int alpha,int beta){if(depth==0)return evaluate(b);auto ms=b.moves();if(ms.empty())return b.check(b.white)?-30000-depth:0;int best=-32000;for(auto m:ms){int v=-search(b.play(m),depth-1,-beta,-alpha);best=max(best,v);alpha=max(alpha,v);if(alpha>=beta)break;}return best;}
-int main(){ios::sync_with_stdio(false);cin.tie(nullptr);Board b;b.fen(START);string line;while(getline(cin,line)){istringstream in(line);string cmd;in>>cmd;if(cmd=="uci"){cout<<"id name Alokhin-Alekhine Engine 0.1\nid author AA Engine Project\nuciok\n";}else if(cmd=="isready")cout<<"readyok\n";else if(cmd=="ucinewgame")b.fen(START);else if(cmd=="position"){string kind;in>>kind;if(kind=="startpos")b.fen(START);else if(kind=="fen"){string f,part;for(int i=0;i<6&&in>>part;i++){if(part=="moves")break;f+=(i?" ":"")+part;}b.fen(f);}string word;while(in>>word){if(word=="moves")continue;for(auto m:b.moves())if(notation(m)==word){b=b.play(m);break;}}}else if(cmd=="go"){int depth=3;string token;while(in>>token)if(token=="depth")in>>depth;depth=clamp(depth,1,5);auto ms=b.moves();if(ms.empty()){cout<<"bestmove 0000\n";continue;}Move best=ms[0];int val=-32000;for(auto m:ms){int v=-search(b.play(m),depth-1,-32000,32000);if(v>val){val=v;best=m;}}cout<<"bestmove "<<notation(best)<<"\n";}else if(cmd=="quit")break;cout.flush();}}
+int pieceValue(char x){switch(toupper(x)){case 'P':return 100;case 'N':return 320;case 'B':return 330;case 'R':return 500;case 'Q':return 900;default:return 0;}}
+int evaluate(const Board& b){
+ int score=0;
+ for(int i=0;i<64;i++){char x=b.s[i];if(x=='.')continue;int v=pieceValue(x),r=i/8,c=i%8;
+ int center=6-abs(3-c)-abs(3-r);
+ if(toupper(x)=='N'||toupper(x)=='B')v+=center*5;
+ if(toupper(x)=='P')v+=(isupper(x)?r:7-r)*7;
+ score+=(isupper(x)?v:-v);
+ }
+ return b.white?score:-score;
+}
+int moveScore(const Board& b,Move m){
+ int victim=pieceValue(b.s[m.b]);if(m.b==b.ep&&toupper(b.s[m.a])=='P')victim=100;
+ return victim*16-pieceValue(b.s[m.a])+(m.p?pieceValue(m.p)*16:0);
+}
+void orderMoves(const Board& b,vector<Move>& ms){
+ stable_sort(ms.begin(),ms.end(),[&](Move a,Move c){return moveScore(b,a)>moveScore(b,c);});
+}
+int quiescence(const Board& b,int alpha,int beta,int ply){
+ if(ply>=12)return evaluate(b);
+ bool inCheck=b.check(b.white);
+ int stand=evaluate(b);
+ if(!inCheck){if(stand>=beta)return beta;alpha=max(alpha,stand);}
+ auto ms=b.moves();
+ if(ms.empty())return inCheck?-30000+ply:0;
+ orderMoves(b,ms);
+ for(auto m:ms){
+  if(!inCheck&&b.s[m.b]=='.'&&m.b!=b.ep&&!m.p)continue;
+  int v=-quiescence(b.play(m),-beta,-alpha,ply+1);
+  if(v>=beta)return beta;
+  alpha=max(alpha,v);
+ }
+ return alpha;
+}
+int search(const Board& b,int depth,int alpha,int beta,int ply=0){
+ if(depth<=0)return quiescence(b,alpha,beta,ply);
+ auto ms=b.moves();
+ if(ms.empty())return b.check(b.white)?-30000+ply:0;
+ orderMoves(b,ms);
+ for(auto m:ms){
+  int v=-search(b.play(m),depth-1,-beta,-alpha,ply+1);
+  if(v>=beta)return beta;
+  alpha=max(alpha,v);
+ }
+ return alpha;
+}
+int main(){ios::sync_with_stdio(false);cin.tie(nullptr);Board b;b.fen(START);string line;while(getline(cin,line)){istringstream in(line);string cmd;in>>cmd;if(cmd=="uci"){cout<<"id name Alokhin-Alekhine Engine 0.2\nid author AA Engine Project\nuciok\n";}else if(cmd=="isready")cout<<"readyok\n";else if(cmd=="ucinewgame")b.fen(START);else if(cmd=="position"){string kind;in>>kind;if(kind=="startpos")b.fen(START);else if(kind=="fen"){string f,part;for(int i=0;i<6&&in>>part;i++){if(part=="moves")break;f+=(i?" ":"")+part;}b.fen(f);}string word;while(in>>word){if(word=="moves")continue;for(auto m:b.moves())if(notation(m)==word){b=b.play(m);break;}}}else if(cmd=="go"){int depth=3;string token;while(in>>token)if(token=="depth")in>>depth;depth=clamp(depth,1,5);auto ms=b.moves();orderMoves(b,ms);if(ms.empty()){cout<<"bestmove 0000\n";continue;}Move best=ms[0];int val=-32000;for(auto m:ms){int v=-search(b.play(m),depth-1,-32000,32000);if(v>val){val=v;best=m;}}cout<<"bestmove "<<notation(best)<<"\n";}else if(cmd=="quit")break;cout.flush();}}
