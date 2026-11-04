@@ -131,8 +131,8 @@ int main(){
  Board b;b.fen(START);string line;
  while(getline(cin,line)){
   istringstream in(line);string cmd;in>>cmd;
-  if(cmd=="uci")cout<<"id name Alokhin-Alekhine Engine 0.5\\nid author AA Engine Project\\nuciok\\n";
-  else if(cmd=="isready")cout<<"readyok\\n";
+  if(cmd=="uci")cout<<"id name Alokhin-Alekhine Engine 0.5\nid author AA Engine Project\nuciok\n";
+  else if(cmd=="isready")cout<<"readyok\n";
   else if(cmd=="ucinewgame"){b.fen(START);tt.clear();}
   else if(cmd=="position"){
    string kind;in>>kind;
@@ -158,7 +158,7 @@ int main(){
    timed=movetime>=0;nodes=0;
    if(timed)deadline=Clock::now()+chrono::milliseconds(max(1,movetime-20));
    auto ms=b.moves();orderMoves(b,ms);
-   if(ms.empty()){cout<<"bestmove 0000\\n";continue;}
+   if(ms.empty()){cout<<"bestmove 0000\n";continue;}
    Move best=ms[0];
    int maxdepth=depthGiven?clamp(depth,1,32):32;
    if(!timed&&!depthGiven)maxdepth=4;
@@ -170,13 +170,13 @@ int main(){
       if(v>score){score=v;candidate=m;}
      }
      best=candidate;
-     cout<<"info depth "<<d<<" score cp "<<score<<" nodes "<<nodes<<" pv "<<notation(best)<<"\\n";
+     cout<<"info depth "<<d<<" score cp "<<score<<" nodes "<<nodes<<" pv "<<notation(best)<<"\n";
      if(timed&&Clock::now()>=deadline)break;
     }catch(const runtime_error&){break;}
    }
-   cout<<"bestmove "<<notation(best)<<"\\n";
+   cout<<"bestmove "<<notation(best)<<"\n";
   }else if(cmd=="perft"){
-   int d=1;in>>d;if(d>=0&&d<=5)cout<<"perft "<<d<<" nodes "<<perft(b,d)<<"\\n";
+   int d=1;in>>d;if(d>=0&&d<=5)cout<<"perft "<<d<<" nodes "<<perft(b,d)<<"\n";
   }else if(cmd=="quit")break;
   cout.flush();
  }
