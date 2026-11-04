@@ -27,6 +27,8 @@ jobs:
         run: |
           printf 'position startpos\ngo movetime 200\nquit\n' | ./aa-engine | tee timed.txt
           grep -q 'bestmove' timed.txt
+      - name: Strict protocol and rules regression tests
+        run: python3 tests/test_engine.py
       - uses: actions/upload-artifact@v4
         with:
           name: aa-engine-linux
