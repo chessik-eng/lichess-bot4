@@ -112,7 +112,11 @@ int qsearch(const Board& b,int alpha,int beta,int ply){
  if(v>=beta)return beta;alpha=max(alpha,v);}
  return alpha;
 }
-int negamax(const Board& b,int depth,int alpha,int beta,int ply){
+bool hasNonPawnMaterial(const Board& b){
+ for(char x:b.s)if(x!='.'&&toupper(x)!='P'&&toupper(x)!='K')return true;
+ return false;
+}
+int negamax(const Board& b,int depth,int alpha,int beta,int ply,bool allowNull=true){
  tick();if(b.halfmove>=100)return 0;
  if(depth<=0)return qsearch(b,alpha,beta,ply);
  string key=keyOf(b);int originalAlpha=alpha;
@@ -124,14 +128,40 @@ int negamax(const Board& b,int depth,int alpha,int beta,int ply){
   if(e.flag==2)beta=min(beta,e.score);
   if(alpha>=beta)return e.score;
  }
- auto ms=b.moves();if(ms.empty())return b.check(b.white)?-30000+ply:0;
+ bool inCheck=b.check(b.white);
+ // Null-move pruning: skip a turn only when not in check and non-pawn material
+ // exists, reducing zugzwang risk in sparse endgames.
+ if(allowNull&&depth>=3&&!inCheck&&hasNonPawnMaterial(b)&&beta<30000){
+  Board nullBoard=b;nullBoard.white=!b.white;nullBoard.ep=-1;nullBoard.halfmove++;
+  int reduction=2+depth/6;
+  int nullScore=-negamax(nullBoard,depth-1-reduction,-beta,-beta+1,ply+1,false);
+  if(nullScore>=beta)return beta;
+ }
+ auto ms=b.moves();if(ms.empty())return inCheck?-30000+ply:0;
  Move ttMove{-1,-1,0};
  if(it!=tt.end())ttMove=it->second.best;
  int betaOriginal=beta;
  orderMoves(b,ms,ttMove,ply);int best=-32000;Move bestMove=ms[0];
- for(auto m:ms){int v=-negamax(b.play(m),depth-1,-beta,-alpha,ply+1);
- if(v>best){best=v;bestMove=m;}
- alpha=max(alpha,v);if(alpha>=beta){
+ for(size_t moveIndex=0;moveIndex<ms.size();moveIndex++){
+  Move m=ms[moveIndex];Board child=b.play(m);
+  bool quiet=b.s[m.a]!='.'&&b.s[m.b]=='.'&&m.b!=b.ep&&!m.p;
+  int childDepth=depth-1;
+  int v;
+  // Late-move reductions: spend less time on late quiet moves, then
+  // restore the full search immediately if a reduced search improves alpha.
+  if(moveIndex>=4&&depth>=3&&quiet&&!inCheck){
+   int reduction=(depth>=6&&moveIndex>=10)?2:1;
+   v=-negamax(child,max(0,childDepth-reduction),-alpha-1,-alpha,ply+1,true);
+   if(v>alpha)v=-negamax(child,childDepth,-alpha-1,-alpha,ply+1,true);
+  }else if(moveIndex==0){
+   v=-negamax(child,childDepth,-beta,-alpha,ply+1,true);
+  }else{
+   // Principal-variation search: scout later moves with a null window.
+   v=-negamax(child,childDepth,-alpha-1,-alpha,ply+1,true);
+   if(v>alpha&&v<beta)v=-negamax(child,childDepth,-beta,-alpha,ply+1,true);
+  }
+  if(v>best){best=v;bestMove=m;}
+  alpha=max(alpha,v);if(alpha>=beta){
   if(b.s[m.b]=='.'&&m.b!=b.ep&&!m.p&&ply<64){
    if(!sameMove(m,killers[ply][0])){killers[ply][1]=killers[ply][0];killers[ply][0]=m;}
    int &h=historyHeuristic[b.white?1:0][m.a][m.b];h=min(1000000,h+depth*depth);
@@ -181,17 +211,29 @@ int main(){
    if(timed)deadline=Clock::now()+chrono::milliseconds(max(1,movetime-20));
    auto ms=b.moves();orderMoves(b,ms);
    if(ms.empty()){cout<<"bestmove 0000\n";continue;}
-   Move best=ms[0];
+   Move best=ms[0];int previousScore=0;
    int maxdepth=depthGiven?clamp(depth,1,32):32;
    if(!timed&&!depthGiven)maxdepth=4;
    for(int d=1;d<=maxdepth;d++){
     try{
      int score=-32000;Move candidate=best;
-     for(auto m:ms){
-      int v=-negamax(b.play(m),d-1,-32000,32000,1);
-      if(v>score){score=v;candidate=m;}
-     }
-     best=candidate;
+     int window= d==1 ? 32000 : 35;
+     int low= d==1 ? -32000 : previousScore-window;
+     int high= d==1 ? 32000 : previousScore+window;
+     auto rootSearch=[&](int a,int z){
+      int localScore=-32000;Move localBest=best;
+      for(size_t i=0;i<ms.size();i++){
+       int v;
+       if(i==0)v=-negamax(b.play(ms[i]),d-1,-z,-a,1);
+       else {v=-negamax(b.play(ms[i]),d-1,-a-1,-a,1);if(v>a&&v<z)v=-negamax(b.play(ms[i]),d-1,-z,-a,1);}
+       if(v>localScore){localScore=v;localBest=ms[i];}
+       a=max(a,v);if(a>=z)break;
+      }
+      return pair<int,Move>{localScore,localBest};
+     };
+     auto result=rootSearch(low,high);score=result.first;candidate=result.second;
+     if(score<=low||score>=high){result=rootSearch(-32000,32000);score=result.first;candidate=result.second;}
+     best=candidate;previousScore=score;
      cout<<"info depth "<<d<<" score cp "<<score<<" nodes "<<nodes<<" pv "<<notation(best)<<"\n";
      if(timed&&Clock::now()>=deadline)break;
     }catch(const runtime_error&){break;}
