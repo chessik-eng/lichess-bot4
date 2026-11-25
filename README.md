@@ -1,45 +1,39 @@
-# Alokhin-Alekhine Engine (AA Engine) — v0.2
+# Alokhin-Alekhine Engine (AA Engine)
 
-Experimental **from-scratch** C++17 UCI chess engine. This is an early prototype, **not** a Stockfish 19 competitor.
+Experimental from-scratch C++17 UCI chess engine. It is an educational prototype and is **not currently proven stronger than Stockfish 19**. No verified Lichess Elo rating is available.
 
 ## Build
 
 ```sh
-g++ -std=c++17 -O2 main.cpp -o aa-engine
+g++ -std=c++17 -O2 -Wall -Wextra main.cpp -o aa-engine
 ```
 
-## UCI smoke test
+## Current search features
 
-```sh
-printf 'uci\nisready\nposition startpos\ngo depth 2\nquit\n' | ./aa-engine
-```
+- Alpha-beta negamax with iterative deepening
+- Quiescence search
+- Transposition table with stored best moves
+- TT / capture / killer / history move ordering
+- Principal-variation search (PVS)
+- Late-move reductions (LMR), with full-depth verification
+- Null-move pruning, guarded against check and pawn-only positions
+- Aspiration windows with full-window re-search
+- UCI clock-based search and fixed-depth search
+- Basic material, center, and pawn-advance evaluation
 
-## Implemented
+## Validation
 
-- Board representation, FEN parsing, move generation with king-safety filtering
-- Castling, en passant and promotions (initial implementations, not yet exhaustively tested)
-- Material and basic positional evaluation; alpha-beta negamax\n- Quiescence search for tactical captures and check evasions\n- Capture/promotion move ordering
-- UCI commands: `uci`, `isready`, `ucinewgame`, `position`, `go depth`, `quit`
-- GitHub Actions compile and smoke test
+GitHub Actions compiles the engine, runs UCI smoke tests, checks start-position perft through depth 4, checks clock-based search, and runs the rules regression suite.
 
-## Limitations
+Passing these checks validates compilation and selected correctness properties; it does **not** establish playing strength or an Elo rating.
 
-- No repetition/50-move draw handling, transposition table, quiescence search, or clock management
-- `go` only supports fixed depth up to 5; no `wtime`/`btime` or asynchronous `stop`
-- **Not ready for unattended Lichess games**; this repository does not yet run a bot
+## Important limitations
 
-## Roadmap
+- Evaluation is still very basic; there is no trained NNUE, tapered piece-square evaluation, robust pawn-structure model, or king-safety model.
+- No verified engine-vs-Stockfish 19 match results exist yet.
+- Threefold repetition and complete draw adjudication are not yet implemented.
+- Search-strength improvements must be measured with paired games at fixed hardware, time control, and settings.
 
-Perft validation, time controls, move ordering, iterative deepening, quiescence, transposition tables, stronger evaluation and engine-vs-engine testing.
+## Goal
 
-## Version 0.2 status
-
-This version improves tactical search compared with v0.1, but strength gains have **not** been measured. The engine is **not proven stronger than Stockfish 19**. UCI clock handling, repetition detection, perft and match testing remain required before Lichess deployment.
-
-## Version 0.4
-
-- Track the halfmove clock in positions and moves, with basic 50-move draw scoring in search.
-- Include halfmove clock in transposition table keys to avoid reusing draw-sensitive evaluations.
-- Extend start-position perft regression coverage to depth 4 (197281 nodes).
-
-**Still experimental:** Threefold repetition, robust UCI stop/ponder handling, thorough castling/en-passant test positions, and full bot integration are not implemented. The 50-move rule handling is basic and does not cover every adjudication edge case. No measured Elo gain or superiority over Stockfish 19 is claimed.
+The long-term experimental target is to build a competitive original chess engine and test it against Stockfish 19. A 5000 Lichess Elo target is aspirational, not a demonstrated or guaranteed result.
