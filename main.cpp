@@ -152,7 +152,7 @@ int negamax(const Board& b,int depth,int alpha,int beta,int ply,bool allowNull=t
   if(moveIndex>=4&&depth>=3&&quiet&&!inCheck){
    int reduction=(depth>=6&&moveIndex>=10)?2:1;
    v=-negamax(child,max(0,childDepth-reduction),-alpha-1,-alpha,ply+1,true);
-   if(v>alpha)v=-negamax(child,childDepth,-alpha-1,-alpha,ply+1,true);
+   if(v>alpha)v=-negamax(child,childDepth,-beta,-alpha,ply+1,true);
   }else if(moveIndex==0){
    v=-negamax(child,childDepth,-beta,-alpha,ply+1,true);
   }else{
