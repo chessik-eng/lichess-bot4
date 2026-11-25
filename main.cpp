@@ -47,8 +47,19 @@ int moveScore(const Board& b,Move m){
  int victim=pieceValue(b.s[m.b]);if(m.b==b.ep&&toupper(b.s[m.a])=='P')victim=100;
  return victim*16-pieceValue(b.s[m.a])+(m.p?pieceValue(m.p)*16:0);
 }
-void orderMoves(const Board& b,vector<Move>& ms){
- stable_sort(ms.begin(),ms.end(),[&](Move a,Move c){return moveScore(b,a)>moveScore(b,c);});
+Move killers[64][2]{};
+int historyHeuristic[2][64][64]{};
+bool sameMove(Move a,Move b){return a.a==b.a&&a.b==b.b&&a.p==b.p;}
+int orderedScore(const Board& b,Move m,Move ttMove,int ply){
+ if(sameMove(m,ttMove))return 2000000;
+ int capture=moveScore(b,m);
+ if(capture>0)return 1000000+capture;
+ if(ply<64&&sameMove(m,killers[ply][0]))return 900000;
+ if(ply<64&&sameMove(m,killers[ply][1]))return 800000;
+ return historyHeuristic[b.white?1:0][m.a][m.b];
+}
+void orderMoves(const Board& b,vector<Move>& ms,Move ttMove=Move{-1,-1,0},int ply=0){
+ stable_sort(ms.begin(),ms.end(),[&](Move a,Move c){return orderedScore(b,a,ttMove,ply)>orderedScore(b,c,ttMove,ply);});
 }
 int quiescence(const Board& b,int alpha,int beta,int ply){
  if(ply>=12)return evaluate(b);
@@ -79,7 +90,7 @@ int search(const Board& b,int depth,int alpha,int beta,int ply=0){
  return alpha;
 }
 using Clock=chrono::steady_clock;
-struct TTEntry { int depth, score, flag; };
+struct TTEntry { int depth, score, flag; Move best; };
 unordered_map<string,TTEntry> tt;
 Clock::time_point deadline;
 uint64_t nodes=0;
@@ -114,11 +125,22 @@ int negamax(const Board& b,int depth,int alpha,int beta,int ply){
   if(alpha>=beta)return e.score;
  }
  auto ms=b.moves();if(ms.empty())return b.check(b.white)?-30000+ply:0;
- orderMoves(b,ms);int best=-32000;
+ Move ttMove{-1,-1,0};
+ if(it!=tt.end())ttMove=it->second.best;
+ int betaOriginal=beta;
+ orderMoves(b,ms,ttMove,ply);int best=-32000;Move bestMove=ms[0];
  for(auto m:ms){int v=-negamax(b.play(m),depth-1,-beta,-alpha,ply+1);
- best=max(best,v);alpha=max(alpha,v);if(alpha>=beta)break;}
- if(tt.size()>150000)tt.clear();
- tt[key]={depth,best,best<=originalAlpha?2:(best>=beta?1:0)};
+ if(v>best){best=v;bestMove=m;}
+ alpha=max(alpha,v);if(alpha>=beta){
+  if(b.s[m.b]=='.'&&m.b!=b.ep&&!m.p&&ply<64){
+   if(!sameMove(m,killers[ply][0])){killers[ply][1]=killers[ply][0];killers[ply][0]=m;}
+   int &h=historyHeuristic[b.white?1:0][m.a][m.b];h=min(1000000,h+depth*depth);
+  }
+  break;
+ }}
+ if(tt.size()>500000)tt.clear();
+ int flag=best<=originalAlpha?2:(best>=betaOriginal?1:0);
+ tt[key]={depth,best,flag,bestMove};
  return best;
 }
 uint64_t perft(const Board& b,int depth){
@@ -133,7 +155,7 @@ int main(){
   istringstream in(line);string cmd;in>>cmd;
   if(cmd=="uci")cout<<"id name Alokhin-Alekhine Engine 0.5\nid author AA Engine Project\nuciok\n";
   else if(cmd=="isready")cout<<"readyok\n";
-  else if(cmd=="ucinewgame"){b.fen(START);tt.clear();}
+  else if(cmd=="ucinewgame"){b.fen(START);tt.clear();fill(&historyHeuristic[0][0][0],&historyHeuristic[0][0][0]+2*64*64,0);for(auto &k:killers)k[0]=k[1]=Move{-1,-1,0};}
   else if(cmd=="position"){
    string kind;in>>kind;
    if(kind=="startpos")b.fen(START);
